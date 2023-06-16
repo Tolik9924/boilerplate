@@ -18,8 +18,13 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
 
     init() {
         this.gravity = 500;
-        this.speed = 150;
-        this.rayGraphics = this.scene.add.graphics({lineStyle: {width: 2, color: 0xaa00aa}});
+        this.speed = 75;
+        this.timeFromLastTurn = 0;
+        this.maxPatrolDistance = 250;
+        this.currentPatrolDistance = 0;
+
+        this.platformCollidersLayer = null;
+        this.rayGraphics = this.scene.add.graphics({ lineStyle: { width: 2, color: 0xaa00aa } });
 
         this.body.setGravityY(this.gravity);
         this.setSize(20, 45);
@@ -27,31 +32,48 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.setCollideWorldBounds(true);
         this.setImmovable(true);
         this.setOrigin(0.5, 1);
+        this.setVelocityX(this.speed);
     }
 
     initEvents() {
-        this.scene.events.on(Phaser.Scenes.Events.UPDATE, this.update, this);
+        this.scene.events.on(Phaser.Scenes.Events.UPDATE, this.update, this)
     }
 
-    update(time, delta) {
-        this.setVelocityX(30);
-        const { ray } = this.raycast(this.body);
+    update(time) {
+        this.patrol(time);
+    }
+
+    patrol(time) {
+        if (!this.body || !this.body.onFloor()) { return; }
+
+        this.currentPatrolDistance += Math.abs(this.body.deltaX());
+
+        const { ray, hasHit } = this.raycast(
+            this.body, 
+            this.platformCollidersLayer, 
+            {
+                raylength: 60,
+                precision: 1,
+                steepnes: 0.5
+            }
+        );
+
+        if ((!hasHit || this.currentPatrolDistance >= this.maxPatrolDistance) &&
+            this.timeFromLastTurn + 100 < time) {
+            this.setFlipX(!this.flipX);
+            this.setVelocityX(this.speed = -this.speed);
+            this.timeFromLastTurn = time;
+            this.currentPatrolDistance = 0;
+        }
 
         this.rayGraphics.clear();
         this.rayGraphics.strokeLineShape(ray);
     }
 
-    raycast(body, raylength = 30) {
-        const { x, y, width, halfHeight } = body;
-        const line = new Phaser.Geom.Line();
-
-        line.x1 = x + width;
-        line.y1 = y + halfHeight;
-        line.x2 = line.x1 + raylength;
-        line.y2 = line.y1 + raylength;
-
-        return { ray: line };
+    setPlatformColliders(platformCollidersLayer) {
+        this.platformCollidersLayer = platformCollidersLayer;
     }
 }
+
 
 export default Enemy;
