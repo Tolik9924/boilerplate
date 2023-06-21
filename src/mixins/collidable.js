@@ -22,8 +22,6 @@ export default {
             };
         }
 
-        console.log('Raycasting!');
-
         const line = new Phaser.Geom.Line();
         let hasHit = false;
 
