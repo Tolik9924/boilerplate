@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 
+// hud
+import HealthBar from '../hud/HealthBar';
+
 // animations
 import initAnimations from './anims/playerAnims';
 
@@ -28,6 +31,15 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.hasBeenHit = false;
         this.bounceVelocity = 250;
         this.cursors = this.scene.input.keyboard.createCursorKeys();
+
+        this.health = 100;
+        this.hp = new HealthBar(
+            this.scene,
+            0,0,
+            this.health
+        );
+
+        debugger;
 
         this.body.setSize(20, 36);
         this.body.setGravityY(this.gravity);
@@ -73,6 +85,15 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             this.play('jump', true);
     }
 
+    playDamageTween() {
+        return this.scene.tweens.add({
+            targets: this,
+            duration: 100,
+            repeat: -1,
+            tint: 0xffffff,
+        });
+    }
+
     bounceOff() {
         this.body.touching.right ?
             this.setVelocityX(-this.bounceVelocity) :
@@ -85,8 +106,13 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         if (this.hasBeenHit) { return };
         this.hasBeenHit = true;
         this.bounceOff();
+        const hitAnim = this.playDamageTween();
 
-        this.scene.time.delayedCall(1000, () => this.hasBeenHit = false);
+        this.scene.time.delayedCall(1000, () => {
+            this.hasBeenHit = false;
+            hitAnim.stop();
+            this.clearTint();
+        });
 
         /* this.scene.time.addEvent({
             delay: 1000,
