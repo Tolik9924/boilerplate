@@ -9,6 +9,9 @@ import initAnimations from './anims/playerAnims';
 // mixin
 import collidable from '../mixins/collidable';
 
+// attacks
+import Projectile from '../attacks/Projectile';
+
 class Player extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y) {
         super(scene, x, y, 'player');
@@ -35,11 +38,11 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.health = 100;
         this.hp = new HealthBar(
             this.scene,
-            0,0,
+            this.scene.config.leftTopCorner.x + 5,
+            this.scene.config.leftTopCorner.y + 5,
+            2,
             this.health
         );
-
-        debugger;
 
         this.body.setSize(20, 36);
         this.body.setGravityY(this.gravity);
@@ -47,6 +50,12 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.setOrigin(0.5, 1);
 
         initAnimations(this.scene.anims);
+
+        this.scene.input.keyboard.on('keydown-Q', () => {
+            console.log('pressing Q');
+            const projectile = new Projectile(this.scene, this.x, this.y, 'iceball');
+            projectile.fire();
+        });
     }
 
     initEvents() {
@@ -107,6 +116,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.hasBeenHit = true;
         this.bounceOff();
         const hitAnim = this.playDamageTween();
+
+        this.health -= initiator.damage;
+        this.hp.decrease(this.health);
 
         this.scene.time.delayedCall(1000, () => {
             this.hasBeenHit = false;
