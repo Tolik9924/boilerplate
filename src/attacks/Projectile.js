@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 
+// effects
+import EffectManager from '../effects/EffectManager';
+
 class Projectile extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y, key) {
         super(scene, x, y, key);
@@ -11,7 +14,12 @@ class Projectile extends Phaser.Physics.Arcade.Sprite {
         this.maxDistance = 300;
         this.traveledDistance = 0;
 
+        this.damage = 10;
         this.cooldown = 500;
+
+        this.body.setSize(this.width - 13, this.height - 20);
+
+        this.effectManager = new EffectManager(this.scene);
     }
 
     preUpdate(time, delta) {
@@ -21,17 +29,28 @@ class Projectile extends Phaser.Physics.Arcade.Sprite {
 
         if (this.isOutRange()) {
             this.body.reset(0, 0);
-            this.setActive(false);
-            this.setVisible(false);
+            this.activeProjectile(false);
             this.traveledDistance = 0;
         }
     }
 
     fire(x, y) {
-        this.setActive(true);
-        this.setVisible(true);
+        this.activeProjectile(true);
         this.body.reset(x, y);
         this.setVelocityX(this.speed);
+    }
+
+    deliversHit(target) {
+        this.activeProjectile(false);
+        this.traveledDistance = 0;
+        const impactPosition = { x: this.x, y: this.y };
+        this.body.reset(0,0);
+        this.effectManager.playEffectOn('hit-effect', target, impactPosition);
+    }
+
+    activeProjectile(isActive) {
+        this.setActive(isActive);
+        this.setVisible(isActive);
     }
 
     isOutRange() {

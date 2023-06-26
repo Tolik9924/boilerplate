@@ -6,6 +6,9 @@ import Player from '../entities/Player';
 // enemies
 import Enemies from '../groups/Enemies';
 
+// anims
+import initAnims from '../anims';
+
 class Play extends Phaser.Scene {
 
     constructor(config) {
@@ -35,6 +38,8 @@ class Play extends Phaser.Scene {
 
         this.createEndOfLevel(playerZones.end, player);
         this.setupFollowupCameraOn(player);
+        
+        initAnims(this.anims);
     }
 
     finishDrawing(pointer, layer) {
@@ -104,10 +109,16 @@ class Play extends Phaser.Scene {
         player.takesHit(enemy);
     }
 
+    onWeaponHit(entity, source) {
+        entity.takesHit(source);
+    }
+
     createEnemyColliders(enemies, { colliders }) {
         enemies
             .addCollider(colliders.platformsColliders)
-            .addCollider(colliders.player, this.onPlayerCollision);
+            .addCollider(colliders.player, this.onPlayerCollision)
+            .addCollider(colliders.player.projectiles, this.onWeaponHit)
+            .addOverlap(colliders.player.meleeWeapon, this.onWeaponHit);
     }
 
     createPlayerColliders(player, { colliders }) {
