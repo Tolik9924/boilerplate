@@ -28,15 +28,13 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.maxPatrolDistance = 250;
         this.currentPatrolDistance = 0;
 
-        this.health = 20;
+        this.health = 200;
         this.damage = 10;
 
         this.platformCollidersLayer = null;
         this.rayGraphics = this.scene.add.graphics({ lineStyle: { width: 2, color: 0xaa00aa } });
 
         this.body.setGravityY(this.gravity);
-        this.setSize(20, 45);
-        this.setOffset(7, 20);
         this.setCollideWorldBounds(true);
         this.setImmovable(true);
         this.setOrigin(0.5, 1);
@@ -91,6 +89,9 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
     setPlatformColliders(platformCollidersLayer) {
         this.platformCollidersLayer = platformCollidersLayer;
     }
+
+    // Enemy is source of the damage for the player
+    deliversHit() {}
 
     takesHit(source) {
         source.deliversHit(this);

@@ -9,6 +9,12 @@ import Enemies from '../groups/Enemies';
 // anims
 import initAnims from '../anims';
 
+// groups
+import Collectables from '../groups/Collectables';
+
+// hud
+import Hud from '../hud';
+
 class Play extends Phaser.Scene {
 
     constructor(config) {
@@ -17,11 +23,18 @@ class Play extends Phaser.Scene {
     }
 
     create() {
+        this.score = 0;
+
         const map = this.createMap();
+        initAnims(this.anims);
+
         const layers = this.createLayers(map);
         const playerZones = this.getPlayerZones(layers.playerZones);
         const player = this.createPlayer(playerZones.start);
         const enemies = this.createEnemies(layers.enemySpawns, layers.platformsColliders);
+        const collectables = this.createCollectables(layers.collectables);
+
+        new Hud(this, 0, 0);
 
         this.createEnemyColliders(enemies, {
             colliders: {
@@ -32,34 +45,14 @@ class Play extends Phaser.Scene {
 
         this.createPlayerColliders(player, {
             colliders: {
-                platformsColliders: layers.platformsColliders
+                platformsColliders: layers.platformsColliders,
+                projectiles: enemies.getProjectiles(),
+                collectables
             }
         });
 
         this.createEndOfLevel(playerZones.end, player);
         this.setupFollowupCameraOn(player);
-        
-        initAnims(this.anims);
-    }
-
-    finishDrawing(pointer, layer) {
-        this.line.x2 = pointer.worldX;
-        this.line.y2 = pointer.worldY;
-
-        this.graphics.clear();
-        this.graphics.strokeLineShape(this.line);
-
-        this.tileHits = layer.getTilesWithinShape(this.line);
-
-        if (this.tileHits.length > 0) {
-            this.tileHits.forEach(tile => {
-                tile.index !== -1 && tile.setCollision(true);
-            });
-        }
-
-        this.drawDebug(layer);
-
-        this.plotting = false;
     }
 
     createMap() {
@@ -71,10 +64,11 @@ class Play extends Phaser.Scene {
     createLayers(map) {
         const tileset = map.getTileset('main_lev_build_1');
         const platformsColliders = map.createDynamicLayer('platforms_colliders', tileset);
-        const environment = map.createStaticLayer('environment', tileset);
+        const environment = map.createStaticLayer('environment', tileset).setDepth(-2);
         const platforms = map.createDynamicLayer('platforms', tileset);
         const playerZones = map.getObjectLayer('player_zones');
         const enemySpawns = map.getObjectLayer('enemy_spawns');
+        const collectables = map.getObjectLayer('collectables');
 
         platformsColliders.setCollisionByProperty({collides: true});
 
@@ -83,8 +77,18 @@ class Play extends Phaser.Scene {
             platforms, 
             platformsColliders, 
             playerZones, 
-            enemySpawns 
+            enemySpawns,
+            collectables 
         };
+    }
+
+    createCollectables(collectableLayer) {
+        const collectables = new Collectables(this).setDepth(-1);
+
+        collectables.addFromLayer(collectableLayer);
+        collectables.playAnimation('diamond-shine');
+
+        return collectables;
     }
 
     createPlayer(start) {
@@ -113,6 +117,12 @@ class Play extends Phaser.Scene {
         entity.takesHit(source);
     }
 
+    onCollect(entity, collectable) {
+        this.score += collectable.score;
+        console.log(this.score);
+        collectable.disableBody(true, true);
+    }
+
     createEnemyColliders(enemies, { colliders }) {
         enemies
             .addCollider(colliders.platformsColliders)
@@ -123,7 +133,9 @@ class Play extends Phaser.Scene {
 
     createPlayerColliders(player, { colliders }) {
         player
-            .addCollider(colliders.platformsColliders);
+            .addCollider(colliders.platformsColliders)
+            .addCollider(colliders.projectiles, this.onWeaponHit)
+            .addOverlap(colliders.collectables, this.onCollect, this);
     }
 
     setupFollowupCameraOn(player) {
