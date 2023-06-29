@@ -18,6 +18,9 @@ import MeleeWeapon from '../attacks/MeleeWeapon';
 // utils
 import { getTimestamp } from '../utils/functions';
 
+// events
+import EventEmitter from '../events/Emitter';
+
 class Player extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y) {
         super(scene, x, y, 'player');
@@ -48,7 +51,7 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.meleeWeapon = new MeleeWeapon(this.scene, 0, 0, 'sword-default');
         this.timeFromLastSwing = null;
 
-        this.health = 100;
+        this.health = 1000;
         this.hp = new HealthBar(
             this.scene,
             this.scene.config.leftTopCorner.x + 5,
@@ -73,7 +76,13 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     update() {
-        if (this.hasBeenHit || this.isSliding) { return; }
+        if (this.hasBeenHit || this.isSliding || !this.body) { return; }
+
+        if (this.getBounds().top > this.scene.config.height) {
+            EventEmitter.emit('PLAYER_LOOSE');
+            return;
+        }
+
         const { left, right, space } = this.cursors;
         const isSpaceJustDown = Phaser.Input.Keyboard.JustDown(space);
         const isUpJustDown = Phaser.Input.Keyboard.JustDown(space);
@@ -155,37 +164,42 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         });
     }
 
-    bounceOff() {
-        this.body.touching.right ?
-            this.setVelocityX(-this.bounceVelocity) :
-            this.setVelocityX(this.bounceVelocity);
+    bounceOff(source) {
+        if (source.body) {
+            this.body.touching.right ?
+                this.setVelocityX(-this.bounceVelocity) :
+                this.setVelocityX(this.bounceVelocity);
+        } else {
+            this.body.blocked.right ?
+                this.setVelocityX(-this.bounceVelocity) :
+                this.setVelocityX(this.bounceVelocity);
+        }
 
         setTimeout(() => this.setVelocityY(-this.bounceVelocity), 0);
     }
 
     takesHit(source) {
         if (this.hasBeenHit) { return };
+
+        this.health -= source.damage || source.properties.damage || 0;
+        if (this.health <= 0) {
+            EventEmitter.emit('PLAYER_LOOSE');
+            return;
+        }
+
         this.hasBeenHit = true;
-        this.bounceOff();
+        this.bounceOff(source);
         const hitAnim = this.playDamageTween();
 
-        this.health -= source.damage;
         this.hp.decrease(this.health);
-        source.deliversHit(this);
+
+        source.deliversHit && source.deliversHit(this);
 
         this.scene.time.delayedCall(1000, () => {
             this.hasBeenHit = false;
             hitAnim.stop();
             this.clearTint();
         });
-
-        /* this.scene.time.addEvent({
-            delay: 1000,
-            callback: () => {
-                this.hasBeenHit = false;
-            },
-            loop: false,
-        }); */
     }
 }
 

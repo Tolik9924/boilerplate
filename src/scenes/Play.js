@@ -15,6 +15,9 @@ import Collectables from '../groups/Collectables';
 // hud
 import Hud from '../hud';
 
+// events
+import EventEmitter from '../events/Emitter';
+
 class Play extends Phaser.Scene {
 
     constructor(config) {
@@ -22,8 +25,9 @@ class Play extends Phaser.Scene {
         this.config = config;
     }
 
-    create() {
+    create({gameStatus}) {
         this.score = 0;
+        this.hud = new Hud(this, 0, 0);
 
         const map = this.createMap();
         initAnims(this.anims);
@@ -34,7 +38,7 @@ class Play extends Phaser.Scene {
         const enemies = this.createEnemies(layers.enemySpawns, layers.platformsColliders);
         const collectables = this.createCollectables(layers.collectables);
 
-        new Hud(this, 0, 0);
+        this.createBG(map);
 
         this.createEnemyColliders(enemies, {
             colliders: {
@@ -47,30 +51,43 @@ class Play extends Phaser.Scene {
             colliders: {
                 platformsColliders: layers.platformsColliders,
                 projectiles: enemies.getProjectiles(),
-                collectables
+                collectables,
+                traps: layers.traps
             }
         });
 
+        this.createBackButton();
         this.createEndOfLevel(playerZones.end, player);
         this.setupFollowupCameraOn(player);
+
+        if (gameStatus === 'PLAYER_LOOSE') { return; }
+        
+        this.createGameEvents();
     }
 
     createMap() {
-        const map = this.make.tilemap({key: 'map'});
+        const map = this.make.tilemap({key: `level_${this.getCurrentLevel()}`});
         map.addTilesetImage('main_lev_build_1', 'tiles-1');
+        map.addTilesetImage('bg_spikes_tileset', 'bg-spikes-tileset');
         return map;
     }
 
     createLayers(map) {
         const tileset = map.getTileset('main_lev_build_1');
+        const tilesetBg = map.getTileset('bg_spikes_tileset');
+
+        map.createStaticLayer('distance', tilesetBg).setDepth(-12);
+
         const platformsColliders = map.createDynamicLayer('platforms_colliders', tileset);
         const environment = map.createStaticLayer('environment', tileset).setDepth(-2);
         const platforms = map.createDynamicLayer('platforms', tileset);
         const playerZones = map.getObjectLayer('player_zones');
         const enemySpawns = map.getObjectLayer('enemy_spawns');
         const collectables = map.getObjectLayer('collectables');
+        const traps = map.createStaticLayer('traps', tileset);
 
         platformsColliders.setCollisionByProperty({collides: true});
+        traps.setCollisionByExclusion(-1);
 
         return { 
             environment, 
@@ -78,8 +95,44 @@ class Play extends Phaser.Scene {
             platformsColliders, 
             playerZones, 
             enemySpawns,
-            collectables 
+            collectables,
+            traps 
         };
+    }
+
+    createBG(map) {
+        const bgObject = map.getObjectLayer('distance_bg').objects[0];
+        
+        this.spikesImage = this.add
+            .tileSprite(bgObject.x, bgObject.y, this.config.width, bgObject.height, 'bg-spikes-dark')
+            .setOrigin(0, 1)
+            .setDepth(-10)
+            .setScrollFactor(0, 1);
+
+        this.skyImage = this.add
+            .tileSprite(0, 0, this.config.width, 180, 'sky-play')
+            .setOrigin(0, 0)
+            .setDepth(-11)
+            .setScale(1.1)
+            .setScrollFactor(0, 1);
+    }
+
+    createBackButton() {
+        const btn = this.add.image(this.config.rightBottomCorner.x, this.config.rightBottomCorner.y, 'back')
+            .setOrigin(1)
+            .setScrollFactor(0)
+            .setScale(2)
+            .setInteractive()
+
+        btn.on('pointerup', () => {
+            this.scene.start('MenuScene');
+        });
+    }
+
+    createGameEvents() {
+        EventEmitter.on('PLAYER_LOOSE', () => {
+            this.scene.restart({gameStatus: "PLAYER_LOOSE"});
+        });
     }
 
     createCollectables(collectableLayer) {
@@ -113,13 +166,13 @@ class Play extends Phaser.Scene {
         player.takesHit(enemy);
     }
 
-    onWeaponHit(entity, source) {
+    onHit(entity, source) {
         entity.takesHit(source);
     }
 
     onCollect(entity, collectable) {
         this.score += collectable.score;
-        console.log(this.score);
+        this.hud.updateScoreBoard(this.score);
         collectable.disableBody(true, true);
     }
 
@@ -127,14 +180,15 @@ class Play extends Phaser.Scene {
         enemies
             .addCollider(colliders.platformsColliders)
             .addCollider(colliders.player, this.onPlayerCollision)
-            .addCollider(colliders.player.projectiles, this.onWeaponHit)
-            .addOverlap(colliders.player.meleeWeapon, this.onWeaponHit);
+            .addCollider(colliders.player.projectiles, this.onHit)
+            .addOverlap(colliders.player.meleeWeapon, this.onHit);
     }
 
     createPlayerColliders(player, { colliders }) {
         player
             .addCollider(colliders.platformsColliders)
-            .addCollider(colliders.projectiles, this.onWeaponHit)
+            .addCollider(colliders.projectiles, this.onHit)
+            .addCollider(colliders.traps, this.onHit)
             .addOverlap(colliders.collectables, this.onCollect, this);
     }
 
@@ -153,6 +207,10 @@ class Play extends Phaser.Scene {
         };
     }
 
+    getCurrentLevel() {
+        return this.registry.get('level') || 1;
+    }
+
     createEndOfLevel(end, player) {
         const endOfLevel = this.physics.add.sprite(end.x, end.y, 'end')
             .setAlpha(0)
@@ -161,8 +219,14 @@ class Play extends Phaser.Scene {
 
         const eolOverlap = this.physics.add.overlap(player, endOfLevel, () => {
             eolOverlap.active = false;
-            console.log('Player has won!');
+            this.registry.inc('level', 1);
+            this.scene.restart({gameStatus: 'LEVEL_COMPLETED'});
         });
+    }
+
+    update() {
+        this.spikesImage.tilePositionX = this.cameras.main.scrollX * 0.3;
+        this.skyImage.tilePositionX = this.cameras.main.scrollX * 0.1;
     }
 }
 
