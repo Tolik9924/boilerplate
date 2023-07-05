@@ -71,8 +71,20 @@ class Preload extends Phaser.Scene {
          this.load.audio('swipe', 'assets/music/swipe.wav');
          this.load.audio('coin-pickup', 'assets/music/coin_pickup.wav');
 
+         const prod = process.env.FB_ENV || process.env.NODE_ENV === 'production';
+
+         this.load.on('progress', value => {
+             prod && FBInstant.setLoadingProgress(value * 100);
+         });
+
          this.load.once('complete', () => {
-            this.startGame();
+            if (prod) {
+                FBInstant.initializeAsync().then(() => {
+                    this.startGame();
+                });
+            } else {
+                this.startGame();
+            }
          });
     }
 
